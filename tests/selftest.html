@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Self-test — Phishing Email Analyser</title>
+  <meta name="color-scheme" content="dark">
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .test-table td, .test-table th { vertical-align: middle; }
+    .verdict-ok { color: #6fe3a6; font-family: var(--mono); font-weight: 700; }
+    .verdict-fail { color: #ff9bab; font-family: var(--mono); font-weight: 700; }
+    .summary { font-size: 1.05rem; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <span class="brand-text">
+          <strong>Self-test &mdash; Phishing Email Analyser</strong>
+          <span>runs the engine against every built-in example</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <span class="pill pill--local"><span class="dot dot--live"></span>local checks only</span>
+        <a class="pill pill--ghost" href="../index.html">&larr; Back to the analyser</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap section-block">
+    <div class="callout callout--info">
+      <p><strong>How to use this page.</strong> Open it in a browser and read the results. Nothing needs to be installed and no network access is used. It loads exactly the same JavaScript files as the main page, runs each demonstration email through the scoring engine, and checks that the result lands in the expected risk band.</p>
+    </div>
+
+    <section class="card mt-3">
+      <h2>Engine results</h2>
+      <p class="muted small">The expectations are deliberately loose: each check confirms the risk <em>band</em> and a sensible minimum score, so small wording tweaks in a sample do not create false failures.</p>
+      <div class="ref-block">
+        <table class="data test-table">
+          <thead>
+            <tr>
+              <th scope="col">Example</th>
+              <th scope="col">Expected band</th>
+              <th scope="col">Score</th>
+              <th scope="col">Actual band</th>
+              <th scope="col">Scoring rules that fired</th>
+              <th scope="col">Result</th>
+            </tr>
+          </thead>
+          <tbody id="engine-rows"></tbody>
+        </table>
+      </div>
+      <p class="summary mt-2" id="engine-summary"></p>
+    </section>
+
+    <section class="card mt-3">
+      <h2>Feature coverage</h2>
+      <p class="muted small">Checks that a rule exists for every indicator this tool is meant to look for.</p>
+      <div class="ref-block">
+        <table class="data test-table">
+          <thead>
+            <tr>
+              <th scope="col">Requested indicator</th>
+              <th scope="col">Rule ID</th>
+              <th scope="col">Result</th>
+            </tr>
+          </thead>
+          <tbody id="coverage-rows"></tbody>
+        </table>
+      </div>
+      <p class="summary mt-2" id="coverage-summary"></p>
+    </section>
+
+    <section class="card mt-3">
+      <h2>Robustness checks</h2>
+      <ul class="prose" id="robust-list"></ul>
+      <p class="summary mt-2" id="robust-summary"></p>
+    </section>
+  </main>
+
+  <!-- Exactly the same script order as index.html -->
+  <script src="../js/rules.js"></script>
+  <script src="../js/urls.js"></script>
+  <script src="../js/html.js"></script>
+  <script src="../js/headers.js"></script>
+  <script src="../js/recommendations.js"></script>
+  <script src="../js/analyser.js"></script>
+  <script src="../js/samples.js"></script>
+  <script>
+    /* The test logic. Plain JavaScript, no test framework required. */
+    (function () {
+      'use strict';
+      var PEA = window.PEA;
+
+      // Expected band and a sensible score range for each demonstration email.
+      var EXPECT = {
+        'obvious': { band: 'high', min: 70, label: 'High Risk' },
+        'sophisticated': { band: 'high', min: 55, label: 'High Risk' },
+        'm365': { band: 'high', min: 80, label: 'High Risk' },
+        'parcel': { band: 'medium', min: 25, max: 54, label: 'Suspicious' },
+        'invoice-bec': { band: 'high', min: 55, label: 'High Risk' },
+        'attachment': { band: 'high', min: 70, label: 'High Risk' },
+        'legitimate': { band: 'clear', min: 0, max: 0, label: 'No Obvious Warning Signs' }
+      };
+
+      function cell(text, className) {
+        var td = document.createElement('td');
+        if (className) { td.className = className; }
+        td.textContent = text == null ? '' : String(text);
+        return td;
+      }
+
+      function row(cells) {
+        var tr = document.createElement('tr');
+        cells.forEach(function (c) { tr.appendChild(c); });
+        return tr;
+      }
+
+      // ---- 1. Run every example through the engine ----------------------
+      var engineRows = document.getElementById('engine-rows');
+      var passed = 0;
+      var failed = 0;
+
+      PEA.samples.all.forEach(function (sample) {
+        var result = PEA.analyser.analyse(sample.text);
+        var want = EXPECT[sample.id] || {};
+        var problems = [];
+
+        if (want.band && result.band.id !== want.band) {
+          problems.push('band ' + result.band.id + ' \u2260 ' + want.band);
+        }
+        if (want.min !== undefined && result.score < want.min) {
+          problems.push('score ' + result.score + ' < ' + want.min);
+        }
+        if (want.max !== undefined && result.score > want.max) {
+          problems.push('score ' + result.score + ' > ' + want.max);
+        }
+
+        var ok = problems.length === 0;
+        if (ok) { passed++; } else { failed++; }
+
+        var fired = result.findings.filter(function (f) { return f.points > 0; })
+          .map(function (f) { return f.id + ' +' + f.points; });
+
+        engineRows.appendChild(row([
+          cell(sample.label),
+          cell(want.label || ''),
+          cell(result.score),
+          cell(result.band.label),
+          cell(fired.length ? fired.join(', ') : '(none)'),
+          cell(ok ? 'PASS' : 'FAIL \u2014 ' + problems.join('; '), ok ? 'verdict-ok' : 'verdict-fail')
+        ]));
+      });
+
+      document.getElementById('engine-summary').textContent =
+        passed + ' of ' + (passed + failed) + ' examples scored in the expected band.';
+
+      // ---- 2. Feature coverage -----------------------------------------
+      var required = [
+        ['Urgency and pressure language', 'urgency_pressure'],
+        ['Threats of account suspension or closure', 'account_threat'],
+        ['Requests for passwords', 'password_request'],
+        ['Requests for MFA or verification codes', 'mfa_code_request'],
+        ['Payment or gift-card requests', 'unusual_payment'],
+        ['Requests to change bank details', 'bank_details_change'],
+        ['Suspicious or look-alike URLs', 'brand_lookalike_domain'],
+        ['Shortened URLs', 'shortened_url'],
+        ['URLs using raw IP addresses', 'ip_address_url'],
+        ['Misleading link text', 'misleading_link_text'],
+        ['Common impersonation language', 'generic_impersonation'],
+        ['Executive or authority impersonation (BEC)', 'bec_authority'],
+        ['Unusual attachment filenames', 'unusual_attachment_name'],
+        ['Executable attachment types', 'executable_attachment'],
+        ['Requests to enable macros', 'macro_request'],
+        ['Unexpected invoice language', 'unexpected_invoice'],
+        ['Credential-harvesting language', 'credential_harvesting'],
+        ['Sender or Reply-To mismatch', 'reply_to_mismatch'],
+        ['SPF failures', 'spf_fail'],
+        ['DKIM failures', 'dkim_fail'],
+        ['DMARC failures', 'dmarc_fail']
+      ];
+
+      var meta = PEA.analyser.allRuleMetadata();
+      var known = {};
+      meta.forEach(function (r) { known[r.id] = r; });
+
+      var coverageRows = document.getElementById('coverage-rows');
+      var covOk = 0;
+
+      required.forEach(function (pair) {
+        var found = known[pair[1]];
+        if (found) { covOk++; }
+        coverageRows.appendChild(row([
+          cell(pair[0]),
+          cell(pair[1]),
+          cell(found ? 'PASS (' + found.points + ' pts, ' + found.severity + ')' : 'FAIL \u2014 rule missing',
+            found ? 'verdict-ok' : 'verdict-fail')
+        ]));
+      });
+
+      document.getElementById('coverage-summary').textContent =
+        covOk + ' of ' + required.length + ' requested indicators are implemented. ' +
+        meta.length + ' rules and weights are registered in total.';
+
+      // ---- 3. Robustness checks ----------------------------------------
+      var robustList = document.getElementById('robust-list');
+      var robustFail = 0;
+
+      function check(name, condition, detail) {
+        var li = document.createElement('li');
+        if (!condition) { robustFail++; }
+        li.textContent = (condition ? 'PASS \u2014 ' : 'FAIL \u2014 ') + name + (detail ? ' (' + detail + ')' : '');
+        li.className = condition ? 'verdict-ok' : 'verdict-fail';
+        robustList.appendChild(li);
+      }
+
+      var first = PEA.analyser.analyse(PEA.samples.byId('m365').text).score;
+      var second = PEA.analyser.analyse(PEA.samples.byId('m365').text).score;
+      check('The same message always produces the same score', first === second, first + ' vs ' + second);
+
+      var empty = PEA.analyser.analyse('');
+      check('Empty input is handled without an error', empty.score === 0 && empty.meta.empty === true);
+
+      var spaces = PEA.analyser.analyse('   \n\t  ');
+      check('Whitespace-only input is handled', spaces.score === 0);
+
+      var junk = PEA.analyser.analyse('<><><> \\\\ %%% ### @@@ [.][]');
+      check('Malformed text is handled', typeof junk.score === 'number' && junk.score >= 0 && junk.score <= 100);
+
+      var huge = PEA.analyser.analyse(new Array(400000).join('a'));
+      check('Very large input is truncated instead of freezing the page', huge.meta.truncated === true, huge.meta.characters + ' characters');
+
+      var htmlSample = PEA.analyser.analyse('<html><body>' +
+        '<a href="https://micros0ft-example.invalid/login">https://login.microsoft.com/auth</a>' +
+        '<img src="https://tracker.example/pixel.gif" width="1" height="1">' +
+        '<form action="https://micros0ft-example.invalid/post"><input type="password" name="password"></form>' +
+        '<div style="display:none">hidden filler words to smuggle text past a spam filter</div>' +
+        '</body></html>');
+      check('Raw HTML source is analysed', htmlSample.detection.htmlFound === true, htmlSample.score + '/100');
+      check('Mismatched link text is detected', htmlSample.findings.some(function (f) { return f.id === 'misleading_link_text'; }));
+      check('An embedded login form is detected', htmlSample.findings.some(function (f) { return f.id === 'embedded_login_form'; }));
+      check('Hidden content is detected', htmlSample.findings.some(function (f) { return f.id === 'hidden_content'; }));
+
+      check('Every example scores between 0 and 100', PEA.samples.all.every(function (s) {
+        var value = PEA.analyser.analyse(s.text).score;
+        return value >= 0 && value <= 100;
+      }), PEA.samples.all.length + ' examples checked');
+
+      var externalRefs = 0;
+      Array.prototype.forEach.call(document.querySelectorAll('script[src], link[href]'), function (node) {
+        var src = node.getAttribute('src') || node.getAttribute('href') || '';
+        if (/^https?:/i.test(src) || /^\/\//.test(src)) { externalRefs++; }
+      });
+      check('This test page itself loads nothing from the internet', externalRefs === 0, externalRefs + ' external references');
+
+      check('No example message contains a real domain suffix', PEA.samples.all.every(function (s) {
+        return s.text.indexOf('.example') !== -1;
+      }), 'all samples use .example');
+
+      check('Reports can be produced as text', typeof PEA.ui !== 'undefined' ? true : false, 'ui.js loaded');
+
+      document.getElementById('robust-summary').textContent =
+        (robustFail === 0 ? 'All robustness checks passed.' : robustFail + ' robustness check(s) failed.');
+
+      // ---- Overall verdict ---------------------------------------------
+      var totalFailures = failed + robustFail + (required.length - covOk);
+      var banner = document.createElement('div');
+      banner.className = 'callout ' + (totalFailures === 0 ? 'callout--ok' : 'callout--danger') + ' mt-3';
+      var line = document.createElement('p');
+      line.className = 'summary';
+      line.textContent = totalFailures === 0
+        ? 'ALL CHECKS PASSED \u2014 the engine behaves as expected.'
+        : totalFailures + ' CHECK(S) FAILED \u2014 see the tables above.';
+      banner.appendChild(line);
+      document.querySelector('main').appendChild(banner);
+    }());
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phishing Email Analyser — private, local email triage</title>
+  <meta name="description" content="A free educational tool that analyses a suspicious email for phishing warning signs. Everything runs inside your browser: nothing is uploaded, there is no server and no tracking.">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%2326d7ee' d='M16 2 4 6v9c0 7.2 5 12.6 12 15 7-2.4 12-7.8 12-15V6L16 2zm0 4.6 8 2.6v5.9c0 5.2-3.3 9.2-8 11.1-4.7-1.9-8-5.9-8-11.1V9.2l8-2.6z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#analyser">Skip to the analyser</a>
+
+  <!-- ---- Cyber chrome: purely decorative, hidden from screen readers ---- -->
+  <div class="scan-sweep" aria-hidden="true"></div>
+  <div class="edge-bar edge-bar--top" aria-hidden="true"></div>
+  <div class="edge-bar edge-bar--bottom" aria-hidden="true"></div>
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+  <!-- The verdict, announced in words for anyone who cannot rely on colour
+       or on the alarm animation. -->
+  <span id="verdict-announcer" class="verdict-sr" role="status" aria-live="polite"></span>
+
+  <!-- ====================================================================
+       HEADER
+       ==================================================================== -->
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <path d="M16 2 4 6v9c0 7.2 5 12.6 12 15 7-2.4 12-7.8 12-15V6L16 2zm0 4.6 8 2.6v5.9c0 5.2-3.3 9.2-8 11.1-4.7-1.9-8-5.9-8-11.1V9.2l8-2.6z"/>
+          <path d="M14.6 13.2h2.8v7.4h-2.8zm0-3.6h2.8v2.4h-2.8z" opacity="0.75"/>
+        </svg>
+        <span class="brand-text">
+          <strong>Phishing Email Analyser</strong>
+          <span>local triage &middot; no server &middot; no tracking</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <span class="pill pill--local"><span class="dot dot--live"></span>100% in-browser</span>
+        <a class="pill pill--ghost" href="#reference">Scoring reference</a>
+      </div>
+
+      <!-- Live status bar: always tells you what state the analyser is in. -->
+      <div class="hud" id="hud" role="status" aria-live="polite"></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ==================================================================
+         PRIVACY NOTICE + DISCLAIMER
+         ================================================================== -->
+    <div class="wrap">
+      <section class="section-block" aria-labelledby="notice-heading">
+        <h2 id="notice-heading" class="visually-hidden">Privacy and safety notice</h2>
+        <div class="two-col">
+          <div class="callout callout--ok">
+            <p><strong>Your email never leaves this page.</strong> The analysis is performed by JavaScript running inside your own browser. There is no server behind this site, no database, no user accounts, no cookies, no analytics and no third-party services. Nothing is uploaded to an artificial-intelligence provider or an external API.</p>
+            <p class="small">You can confirm this yourself: press F12, open the Network tab, clear it, then analyse a message. You will see no new requests.</p>
+          </div>
+          <div class="callout callout--warn">
+            <p><strong>This is an educational triage tool, not a verdict.</strong> It looks for warning signs that phishing messages tend to share. It cannot prove that an email is malicious, and it cannot prove that one is genuine.</p>
+            <p class="small">Never click a suspicious link, open an attachment or scan a QR code just to test it. Verify important messages independently, using the organisation&rsquo;s official app or website, or a phone number you already have.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           THE ANALYSER
+           ================================================================== -->
+      <section id="analyser" class="section-block" aria-labelledby="analyser-heading">
+        <h1 id="analyser-heading" class="visually-hidden">Analyse an email for phishing warning signs</h1>
+
+        <div class="analyser-grid">
+          <!-- ---------- Left column: the input ---------- -->
+          <div class="input-stack sticky-col">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h2 class="card-title">Paste the email</h2>
+                  <p class="card-sub">Include as much as you can. Raw headers, printed links and attachment names all add checks.</p>
+                </div>
+              </div>
+
+              <label for="email-input">Message contents</label>
+              <textarea id="email-input" spellcheck="false" autocomplete="off"
+                placeholder="Paste the whole email here, including the From, Subject, Reply-To and Received lines if you have them..."></textarea>
+
+              <div class="field-meta">
+                <span id="char-count">0 characters</span>
+                <span>Ctrl + Enter to analyse</span>
+              </div>
+
+              <div class="detect-row" id="detect-row" aria-live="polite"></div>
+
+              <div class="btn-row mt-2">
+                <button type="button" id="analyse-btn" class="btn btn--primary">Analyse Email</button>
+                <button type="button" id="paste-btn" class="btn btn--auto">Paste from clipboard</button>
+                <button type="button" id="clear-btn" class="btn btn--ghost btn--auto">Clear</button>
+              </div>
+
+              <p class="field-help mt-1">Tip: in Outlook choose <em>View &rarr; View source</em>; in Gmail choose <em>Show original</em>; in Apple Mail choose <em>View &rarr; Message &rarr; Raw Source</em>. Copy everything, then paste it above.</p>
+            </div>
+
+            <div class="card">
+              <p class="sample-label">Try a fictional example</p>
+              <div class="sample-chips" id="sample-chips"></div>
+              <p class="field-help mt-1">These demonstration messages are invented for learning. Their domains use the reserved <code>.example</code> suffix and their IP addresses are documentation ranges, so none of the links can reach a real website.</p>
+            </div>
+          </div>
+
+          <!-- ---------- Right column: the result ---------- -->
+          <div>
+            <div class="card mb-2">
+              <div class="card-head">
+                <div>
+                  <h2 class="card-title">Result</h2>
+                  <p class="card-sub">Score, evidence and what to do next. Nothing is uploaded at any point.</p>
+                </div>
+                <div class="spacer"></div>
+                <div class="btn-row">
+                  <button type="button" id="alarm-toggle" class="btn btn--small btn--auto" aria-pressed="true">Alarm effects: ON</button>
+                  <button type="button" id="copy-btn" class="btn btn--small btn--auto">Copy report</button>
+                  <button type="button" id="download-txt-btn" class="btn btn--small btn--auto">Save .txt</button>
+                  <button type="button" id="download-json-btn" class="btn btn--small btn--auto">Save .json</button>
+                  <button type="button" id="print-btn" class="btn btn--small btn--ghost btn--auto">Print</button>
+                </div>
+              </div>
+              <p class="field-help mb-1">The page colour, the edge bars and the pulsing are <em>presentation only</em>: a slow pulse, never a strobe, and it can be switched off here at any time. The alarm follows your system&rsquo;s &ldquo;reduce motion&rdquo; setting, and the preference is never saved to your device.</p>
+            </div>
+
+            <div id="results" aria-live="polite" aria-busy="false"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================================
+           SCORING REFERENCE: every rule and every weight, in the open
+           ================================================================== -->
+      <section id="reference" class="section-block" aria-labelledby="reference-heading">
+        <div class="section-head">
+          <h2 id="reference-heading">Scoring reference</h2>
+          <p>Every rule in this tool, with the points it adds and the severity it is given. This table is generated from the same data the analyser uses, so it cannot drift out of step with the results. Points are added together and capped at 100, and each rule awards its points only once no matter how many times it matches.</p>
+        </div>
+
+        <div class="card card--flush">
+          <div class="ref-block">
+            <table class="data">
+              <caption>Bands: 0 = No obvious warning signs &middot; 1&ndash;24 = Low Risk &middot; 25&ndash;54 = Suspicious &middot; 55&ndash;100 = High Risk</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Rule ID</th>
+                  <th scope="col">Checked in</th>
+                  <th scope="col">What it detects</th>
+                  <th scope="col">Severity</th>
+                  <th scope="col" style="text-align:right">Points</th>
+                </tr>
+              </thead>
+              <tbody id="reference-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ====================================================================
+       FOOTER
+       ==================================================================== -->
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <h4>Phishing Email Analyser</h4>
+          <p>An educational triage tool for learning to recognise phishing and social-engineering warning signs, built as a static site with plain HTML, CSS and JavaScript.</p>
+          <p>Full technical documentation (the logic, the scoring model, the theme engine, the tests and the limits) is kept in <code>docs/HOW-IT-WORKS.md</code>.</p>
+        </div>
+        <div>
+          <h4>Privacy</h4>
+          <ul>
+            <li>Analysis runs entirely in your browser</li>
+            <li>No server, database or user accounts</li>
+            <li>No cookies, analytics or telemetry</li>
+            <li>No AI or third-party APIs</li>
+            <li>No outbound network requests</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Remember</h4>
+          <ul>
+            <li>A low score is not a guarantee</li>
+            <li>Never test suspect links or attachments</li>
+            <li>Verify through official apps and known phone numbers</li>
+            <li>Report suspicious messages to your IT team</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; <span id="year">2026</span> Phishing Email Analyser &middot; for education</span>
+        <span class="mono">No data leaves your device</span>
+      </div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Load order matters: data and helpers first, then the engine, then the UI. -->
+  <script src="js/rules.js"></script>
+  <script src="js/urls.js"></script>
+  <script src="js/html.js"></script>
+  <script src="js/headers.js"></script>
+  <script src="js/recommendations.js"></script>
+  <script src="js/analyser.js"></script>
+  <script src="js/samples.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
