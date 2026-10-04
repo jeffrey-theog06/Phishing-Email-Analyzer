@@ -27,17 +27,6 @@ You can verify this yourself: press **F12**, open the **Network** tab, clear it,
 
 ---
 
-## 🧭 Quick Navigation
-
-- [What the App Does](#-what-the-app-does)
-- [Detection Coverage](#-detection-coverage)
-- [Project Structure](#-project-structure)
-- [Built-in Demo Emails](#-built-in-demonstration-emails)
-- [Running the Tests](#-running-the-tests)
-- [Customising the Rules](#-customising-it)
-- [Author](#-author)
-
----
 
 ## 🚀 Quick Start
 
@@ -99,31 +88,6 @@ The complete rule list and weights are rendered as a **Scoring Reference** table
 
 ---
 
-## 🗂️ Project Structure
-
-```
-Phishing Email Analyzer/
-├── index.html               →  page structure, privacy notice, disclaimer, form & scoring reference table
-├── css/
-│   └── styles.css           →  the whole design system (dark "security console" theme)
-├── js/
-│   ├── rules.js             →  ALL detection rules + their score weights (data, in one place)
-│   ├── urls.js              →  URL extraction and domain trickery analysis
-│   ├── headers.js           →  parses pasted raw headers (SPF/DKIM/DMARC, From/Reply-To)
-│   ├── html.js              →  raw HTML source analysis (hidden text, tracking pixels, forms)
-│   ├── analyser.js          →  the scoring engine (turns findings into 0–100 + classification)
-│   ├── recommendations.js   →  advice generated from what was found
-│   ├── samples.js           →  the 7 fictional demo emails
-│   ├── ui.js                →  draws the gauge, findings list, evidence snippets and report
-│   └── app.js               →  wires the buttons, clipboard, downloads and keyboard shortcuts
-└── tests/
-    ├── selftest.html         →  in-browser test page — pass/fail report against all samples
-    └── headless-check.js    →  Node.js runner — no browser, no dependencies required
-```
-
-Scripts are loaded as plain (non-module) scripts in a fixed order so the site works when opened straight from disk with no web server.
-
----
 
 ## 📧 Built-in Demonstration Emails
 
@@ -160,16 +124,6 @@ Prints the score, band, and fired rules for each demo email, then validates each
 
 ---
 
-## ⚙️ Customising It
-
-| What to Change | Where & How |
-| :--- | :--- |
-| **Adjust a score weight** | Open `js/rules.js`, find the rule, change its `points` value |
-| **Add a body-language rule** | Copy an entry in `BODY_RULES` — give it a new `id`, `title`, `why`, `advice`, `severity`, `points`, and one or more `patterns` (RegExp). It appears automatically in results, score arithmetic, and the reference table |
-| **Add a brand to look-alike checks** | Add an entry to `BRANDS` in `js/rules.js` with its display name, hint `tokens`, and genuine `domains` |
-| **Change the risk bands** | Edit the `BANDS` array at the top of `js/analyser.js` and the band description caption in `index.html` |
-
----
 
 ## ⚠️ What It Deliberately Does Not Do
 
@@ -187,17 +141,3 @@ Prints the score, band, and fired rules for each demo email, then validates each
 - **Verify independently** — use the organisation's official app or website, or a phone number you already have, never one from the message
 - A **low score** means "nothing obvious was found", not "this is safe"
 - If you already acted on a suspicious message: change the password, enable MFA, and contact your bank or IT team immediately
-
----
-
-## 👤 Author
-
-**J. Jeffrey Shalom**
-- **GitHub**: [@jeffrey-theog06](https://github.com/jeffrey-theog06)
-- **Role**: Security Engineer Enthusiast & Full-Stack Developer
-
----
-
-## 📄 Licence & Intent
-
-Built as a learning project for defensive security education. Use it to train your eye, to understand what phishing messages have in common, and to explain risk to others. It is not a substitute for professional email security controls.
